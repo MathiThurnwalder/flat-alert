@@ -1,24 +1,24 @@
 {
   "max_price": 1300,
+  "min_size": 40,
   "exclude_keywords": ["parkplatz", "garage", "stellplatz", "tiefgarage", "lagerfläche", "lagerflache"],
   "max_alerts_per_run": 20,
   "sources": {
     "oeh": {
       "label": "ÖH Wohnungsbörse",
-      "feed": "https://wohnen.oehweb.at/?post_type=estate_property&feed=rss2"
+      "feed": "https://wohnen.oehweb.at/?post_type=estate_property&feed=rss2",
+      "city": "innsbruck"
     },
     "tt": {
       "label": "immo.tt.com",
       "pages": [
-        "https://immo.tt.com/mietobjekt/wohnung/tirol/innsbruck-stadt?page=1&limit=50",
-        "https://immo.tt.com/mietobjekt/wohnung/tirol/innsbruck-land?page=1&limit=50"
+        "https://immo.tt.com/mietobjekt/wohnung/tirol/innsbruck-stadt?page=1&limit=50"
       ]
     },
     "is24": {
       "label": "ImmoScout24.at",
       "pages": [
-        "https://www.immobilienscout24.at/regional/tirol/innsbruck/wohnung-mieten",
-        "https://www.immobilienscout24.at/regional/tirol/innsbruck-land/wohnung-mieten"
+        "https://www.immobilienscout24.at/regional/tirol/innsbruck/wohnung-mieten"
       ]
     }
   }
