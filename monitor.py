@@ -46,6 +46,18 @@ def parse_price(text):
     return int(digits) if digits.isdigit() else None
 
 
+def parse_size(text):
+    """'41,24 m²' / '65 m2' -> 41.24 / 65.0 (m², float). None if no number."""
+    if text is None:
+        return None
+    if isinstance(text, (int, float)):
+        return float(text)
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:m²|m<sup>2|m2|qm)", text)
+    if not m:
+        return None
+    return float(m.group(1).replace(",", "."))
+
+
 # --------------------------------------------------------------- sources
 
 def source_oeh(cfg):
@@ -64,19 +76,40 @@ def source_oeh(cfg):
             "id": "oeh-" + (guid.group(1) if guid else url.rstrip("/").rsplit("/", 1)[-1]),
             "title": unescape(title.group(1).strip()) if title else url,
             "price": None,
+            "size": None,
             "url": url,
             "extra": "",
         })
     return listings
 
 
-def fetch_oeh_price(url):
+def fetch_oeh_details(url):
+    """Detail page: price ('price_area'), size ('Größe:' field), city slug."""
+    out = {"price": None, "size": None, "city": None}
+    try:
+        html = fetch(url)
+    except Exception:
+        return out
+    m = re.search(r'"price_area">\s*€?\s*([\d.,]+)', html)
+    if m:
+        out["price"] = parse_price(m.group(1))
+    m = re.search(r"Größe:</strong>\s*([\d.,]+\s*m)", html)
+    if m:
+        out["size"] = parse_size(m.group(1) + "2")
+    m = re.search(r"/ort/([a-z0-9-]+)/", html)
+    if m:
+        out["city"] = m.group(1)
+    return out
+
+
+def fetch_tt_size(url):
+    """TT cards don't show the size; the detail page does (first 'NN m²')."""
     try:
         html = fetch(url)
     except Exception:
         return None
-    m = re.search(r'"price_area">\s*€?\s*([\d.,]+)', html)
-    return parse_price(m.group(1)) if m else None
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*m²", html)
+    return parse_size(m.group(0)) if m else None
 
 
 def source_tt(cfg):
@@ -97,6 +130,7 @@ def source_tt(cfg):
                 "id": "tt-" + lid,
                 "title": data.get("title") or href,
                 "price": parse_price(data.get("price")),
+                "size": None,
                 "url": "https://immo.tt.com" + href,
                 "extra": page.split("/tirol/")[-1].split("?")[0].replace("-", " ").title(),
             })
@@ -134,10 +168,13 @@ def source_is24(cfg):
                     ((f.get("value") or "") + " " + (f.get("label") or "")).strip()
                     for f in h.get("mainKeyFacts", [])
                 )
+                sizes = [parse_size(f.get("value")) for f in h.get("mainKeyFacts", [])]
+                sizes = [s for s in sizes if s]
                 listings.append({
                     "id": "is24-" + h["exposeId"],
                     "title": unescape(h.get("headline") or facts or h["exposeId"]),
                     "price": parse_price(h.get("primaryPrice")),
+                    "size": sizes[0] if sizes else None,
                     "url": h.get("links", {}).get("absoluteURL")
                     or origin + "/expose/" + h["exposeId"],
                     "extra": unescape(" · ".join(
@@ -177,6 +214,8 @@ def esc(s):
 
 def format_alert(label, item):
     price = f"€ {item['price']}" if item["price"] is not None else "Preis siehe Inserat"
+    if item.get("size"):
+        price += f" · {item['size']:g} m²"
     lines = [
         f"🏠 <b>{esc(item['title'])}</b>",
         f"💶 {price}",
@@ -199,6 +238,7 @@ def main():
     seen = state.setdefault("seen", {})
 
     max_price = config.get("max_price")
+    min_size = config.get("min_size")
     excludes = [k.lower() for k in config.get("exclude_keywords", [])]
     max_alerts = config.get("max_alerts_per_run", 20)
     alerts_sent = 0
@@ -229,8 +269,23 @@ def main():
             title_l = item["title"].lower()
             if any(k in title_l for k in excludes):
                 continue
-            if name == "oeh" and item["price"] is None:
-                item["price"] = fetch_oeh_price(item["url"])
+            if name == "oeh":
+                det = fetch_oeh_details(item["url"])
+                if item["price"] is None:
+                    item["price"] = det["price"]
+                if item["size"] is None:
+                    item["size"] = det["size"]
+                want_city = cfg.get("city")
+                if want_city and det["city"] and det["city"] != want_city:
+                    continue
+            if name == "tt" and item["size"] is None:
+                item["size"] = fetch_tt_size(item["url"])
+            if (
+                min_size is not None
+                and item["size"] is not None
+                and item["size"] < min_size
+            ):
+                continue
             if (
                 max_price is not None
                 and item["price"] is not None
