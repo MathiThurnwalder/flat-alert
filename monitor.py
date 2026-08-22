@@ -190,22 +190,27 @@ SOURCES = {"oeh": source_oeh, "tt": source_tt, "is24": source_is24}
 # --------------------------------------------------------------- alerting
 
 def telegram_send(text):
+    """TELEGRAM_CHAT_ID may hold several ids, comma-separated."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
-    if not token or not chat_id:
+    chat_ids = [c.strip() for c in os.environ.get("TELEGRAM_CHAT_ID", "").split(",") if c.strip()]
+    if not token or not chat_ids:
         print("[dry-run] " + text.replace("\n", " | "))
         return
-    body = urllib.parse.urlencode({
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": "false",
-    }).encode()
-    req = urllib.request.Request(
-        f"https://api.telegram.org/bot{token}/sendMessage", data=body
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        resp.read()
+    for chat_id in chat_ids:
+        body = urllib.parse.urlencode({
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": "false",
+        }).encode()
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage", data=body
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                resp.read()
+        except Exception as e:  # one bad chat id must not block the others
+            print(f"WARNING: send to {chat_id} failed: {e}", file=sys.stderr)
 
 
 def esc(s):
