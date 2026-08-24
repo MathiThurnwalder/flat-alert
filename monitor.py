@@ -194,7 +194,55 @@ def source_is24(cfg):
     return listings
 
 
-SOURCES = {"oeh": source_oeh, "tt": source_tt, "is24": source_is24}
+def source_willhaben(cfg):
+    """Next.js page; __NEXT_DATA__ carries all ads with clean attributes."""
+    listings = []
+    for page in cfg["pages"]:
+        html = fetch(page)
+        m = re.search(
+            r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+            html, re.S,
+        )
+        if not m:
+            raise ValueError("willhaben: __NEXT_DATA__ not found (layout change or bot block)")
+        data = json.loads(m.group(1))
+        ads = data["props"]["pageProps"]["searchResult"]["advertSummaryList"]["advertSummary"]
+        for a in ads:
+            attrs = {
+                x["name"]: x.get("values") or []
+                for x in a.get("attributes", {}).get("attribute", [])
+            }
+            def av(name):
+                vals = attrs.get(name) or []
+                return vals[0] if vals else None
+            raw_price = av("PRICE")
+            try:
+                price = int(float(raw_price)) if raw_price else None
+            except ValueError:
+                price = parse_price(raw_price)
+            size = av("ESTATE_SIZE/LIVING_AREA") or av("ESTATE_SIZE")
+            seo = av("SEO_URL")
+            listings.append({
+                "id": "wh-" + str(a["id"]),
+                "title": a.get("description") or av("HEADING") or str(a["id"]),
+                "price": price,
+                "size": parse_size((size or "") + " m2"),
+                "url": ("https://www.willhaben.at/iad/" + seo) if seo
+                else "https://www.willhaben.at/iad/object?adId=" + str(a["id"]),
+                "extra": " · ".join(x.strip() for x in [
+                    av("ADDRESS"),
+                    ((av("POSTCODE") or "") + " " + (av("LOCATION") or "")).strip(),
+                ] if x and x.strip()),
+            })
+    return listings
+
+
+SOURCES = {
+    "oeh": source_oeh,
+    "tt": source_tt,
+    "is24": source_is24,
+    "willhaben": source_willhaben,
+}
 
 
 # --------------------------------------------------------------- alerting
