@@ -20,6 +20,12 @@
       "pages": [
         "https://www.immobilienscout24.at/regional/tirol/innsbruck/wohnung-mieten"
       ]
+    },
+    "willhaben": {
+      "label": "willhaben",
+      "pages": [
+        "https://www.willhaben.at/iad/immobilien/mietwohnungen/tirol/innsbruck?rows=100"
+      ]
     }
   }
 }
