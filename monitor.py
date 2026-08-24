@@ -58,6 +58,16 @@ def parse_size(text):
     return float(m.group(1).replace(",", "."))
 
 
+def is_wanted_ad(title):
+    """True for 'Suchinserate' (people LOOKING for a flat), which TT mixes
+    into the results. Offer phrasings like 'Nachmieter gesucht' stay."""
+    t = title.lower()
+    for offer_hint in ("nachmieter", "mieter gesucht", "mitbewohner", "sie suchen"):
+        if offer_hint in t:
+            return False
+    return re.search(r"\bsuch(e|t|en)\b|gesucht", t) is not None
+
+
 # --------------------------------------------------------------- sources
 
 def source_oeh(cfg):
@@ -273,6 +283,8 @@ def main():
                 continue  # seed silently, no alert flood on first run
             title_l = item["title"].lower()
             if any(k in title_l for k in excludes):
+                continue
+            if is_wanted_ad(item["title"]):
                 continue
             if name == "oeh":
                 det = fetch_oeh_details(item["url"])
